@@ -1,14 +1,16 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
-import { Grid } from '@giphy/react-components';
-import styled, { createGlobalStyle, keyframes } from 'styled-components';
+import styled, { createGlobalStyle, keyframes, ThemeProvider } from 'styled-components';
 import debounce from 'lodash/debounce';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Grid } from '@giphy/react-components';
 
 const gf = new GiphyFetch(process.env.REACT_APP_GIPHY_API_KEY || '');
+const queryClient = new QueryClient();
 
 // Google Fonts
 const GlobalStyle = createGlobalStyle`
-  @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Montserrat:wght@400;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Montserrat:wght@400;700&family=Poppins:wght@700&display=swap');
   body {
     font-family: 'Montserrat', Arial, sans-serif;
     background: linear-gradient(135deg, #f8fafc 0%, #e3e9f3 100%);
@@ -27,6 +29,7 @@ const AppContainer = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
+  box-sizing: border-box;
 `;
 
 const CenteredBox = styled.div`
@@ -35,12 +38,13 @@ const CenteredBox = styled.div`
   align-items: center;
   margin-top: 8vh;
   width: 100%;
+  box-sizing: border-box;
 `;
 
 const Description = styled.div`
   font-family: 'Bangers', cursive;
   font-size: 2.2rem;
-  color: #222;
+  color: ${({ theme }) => theme.headingColor};
   margin-bottom: 2rem;
   font-weight: 400;
   text-align: center;
@@ -49,10 +53,14 @@ const Description = styled.div`
   max-width: 700px;
   margin-left: auto;
   margin-right: auto;
-  text-shadow: 2px 2px 0 #fff, 4px 4px 0 #2196f3;
+  text-shadow: ${({ theme }) => theme.headingOutline};
+  box-sizing: border-box;
+  padding-left: 1rem;
+  padding-right: 1rem;
   @media (max-width: 600px) {
     font-size: 1.3rem;
-    padding: 0 1rem;
+    padding: 0 0.5rem;
+    margin-bottom: 1.2rem;
   }
 `;
 
@@ -60,6 +68,12 @@ const CatMascot = styled.div`
   width: 80px;
   height: 80px;
   margin-bottom: 1.2rem;
+  transition: transform 0.18s cubic-bezier(0.4, 1.4, 0.6, 1.0);
+  will-change: transform;
+  &:hover {
+    transform: scale(1.13) rotate(-6deg);
+    filter: brightness(1.1) drop-shadow(0 2px 8px #ffe08288);
+  }
   @media (max-width: 600px) {
     width: 56px;
     height: 56px;
@@ -75,12 +89,16 @@ const SearchContainer = styled.div`
   align-items: center;
   margin-left: auto;
   margin-right: auto;
-  background: #fffbe7;
-  border: 3px solid #222;
+  background: ${({ theme }) => theme.inputBg};
+  border: 3px solid ${({ theme }) => theme.inputBorder};
   border-radius: 32px;
-  box-shadow: 0 4px 24px rgba(33,150,243,0.08);
+  box-shadow: ${({ theme }) => theme.inputShadow};
+  transition: box-shadow 0.18s, border 0.18s, background 0.18s;
+  box-sizing: border-box;
   @media (max-width: 600px) {
-    max-width: 95vw;
+    max-width: 98vw;
+    min-width: 0;
+    padding: 0 0.5rem;
   }
 `;
 
@@ -99,10 +117,10 @@ const SearchInput = styled.input`
   white-space: nowrap;
   padding-right: 3.5rem;
   font-family: 'Montserrat', Arial, sans-serif;
-  color: #222;
+  color: ${({ theme }) => theme.color};
 
   &:focus {
-    box-shadow: 0 4px 24px rgba(33,150,243,0.15);
+    box-shadow: ${({ theme }) => theme.inputFocus};
   }
   @media (max-width: 600px) {
     font-size: 1rem;
@@ -127,6 +145,7 @@ const StyledSearchIconSVG = styled.svg`
   width: 1.4em;
   vertical-align: middle;
   display: block;
+  color: ${({ theme }) => theme.searchIcon};
 `;
 
 const ClearButton = styled.button`
@@ -159,6 +178,11 @@ const GridContainer = styled.div`
   max-width: 1000px;
   margin: 0 auto;
   padding: 0 1rem 2rem 1rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   @media (max-width: 1000px) {
     max-width: 100vw;
     padding: 0 0.5rem 2rem 0.5rem;
@@ -182,7 +206,7 @@ const Spinner = styled.div`
 // Cartoon Cat SVG
 const CatSVG = () => (
   <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="40" cy="50" rx="28" ry="22" fill="#ffe082" stroke="#222" strokeWidth="3"/>
+    <ellipse cx="40" cy="50" rx="28" ry="22" fill="#ffe082" stroke="#222" strokeWidth="4"/>
     <ellipse cx="40" cy="50" rx="20" ry="16" fill="#fffbe7" stroke="#222" strokeWidth="2"/>
     <ellipse cx="32" cy="48" rx="3" ry="4" fill="#222"/>
     <ellipse cx="48" cy="48" rx="3" ry="4" fill="#222"/>
@@ -285,6 +309,71 @@ const ClearIconSVG = () => (
   </StyledClearIconSVG>
 );
 
+const lightTheme = {
+  background: 'linear-gradient(135deg, #f8fafc 0%, #e3e9f3 100%)',
+  color: '#222',
+  gridBg: '#fff',
+  gridBorder: '#e0e0e0',
+  inputBg: '#fffbe7',
+  inputBorder: '#222',
+  inputShadow: '0 6px 24px #ffe08255, 0 2px 0 #90caf9',
+  inputFocus: '0 4px 24px #90caf988',
+  toggleBg: '#fff',
+  toggleBorder: '#222',
+  headingColor: '#222',
+  headingOutline: '-2px 2px 0 #fff, 2px 4px 0 #90caf9',
+  headingShadow: '2px 2px 0 #fff, 4px 4px 0 #90caf9',
+  searchIcon: '#b0b0b0',
+};
+const darkTheme = {
+  background: 'linear-gradient(135deg, #23272f 0%, #181a20 100%)',
+  color: '#fff',
+  gridBg: '#23272f',
+  gridBorder: '#333',
+  inputBg: '#23272f',
+  inputBorder: '#ffe082',
+  inputShadow: '0 6px 24px #ffe08255, 0 2px 0 #90caf9',
+  inputFocus: '0 4px 24px #ffe08299',
+  toggleBg: '#23272f',
+  toggleBorder: '#90caf9',
+  headingColor: '#f5e9c8',
+  headingOutline: '-2px 2px 0 #111b2b, 2px 4px 0 #90caf9',
+  headingShadow: '2px 2px 0 #90caf9, 4px 4px 0 #111b2b',
+  searchIcon: '#fff',
+};
+
+const GridWrapper = styled.div`
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto 2rem auto;
+  padding: 2rem 1rem 2.5rem 1rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  @media (max-width: 600px) {
+    padding: 1rem 0.2rem 1.5rem 0.2rem;
+    margin: 0 auto 1rem auto;
+  }
+`;
+
+const NightModeToggle = styled.button`
+  position: absolute;
+  top: 1.5rem;
+  right: 2rem;
+  background: ${({ theme }) => theme.toggleBg};
+  color: ${({ theme }) => theme.color};
+  border: 2.5px solid ${({ theme }) => theme.toggleBorder};
+  border-radius: 20px;
+  font-family: 'Bangers', cursive;
+  font-size: 1.1rem;
+  padding: 0.5rem 1.2rem;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(33,150,243,0.12);
+  transition: background 0.2s, color 0.2s, border 0.2s;
+`;
+
 function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTerm, setActiveTerm] = useState('');
@@ -292,8 +381,10 @@ function App() {
   const [gridWidth, setGridWidth] = useState(900);
   const [gifCount, setGifCount] = useState(0);
   const [noResults, setNoResults] = useState(false);
+  const [nightMode, setNightMode] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<any>(null);
+  const [trendingKey, setTrendingKey] = useState(0); // for Grid key reset
 
   // Stable debounced function for >3 chars
   const debouncedSetActiveTerm = useCallback(
@@ -346,100 +437,115 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Update fetchGifs to set firstBatchLoaded
+  // Responsive columns for Giphy Grid
+  let gridColumns = 3;
+  if (gridWidth < 500) gridColumns = 1;
+  else if (gridWidth < 800) gridColumns = 2;
+  else gridColumns = Math.max(2, Math.floor(gridWidth/300));
+
+  // Theme object
+  const theme = nightMode ? darkTheme : lightTheme;
+
+  // Giphy Grid fetchers
   const fetchGifs = useCallback(
-    async (offset: number) => {
-      console.log('fetchGifs called', { offset, activeTerm, searchTerm });
-      if (!activeTerm) {
-        setLoading(false);
-        setNoResults(false);
-        return { data: [], pagination: { total_count: 0, count: 0, offset: 0 }, meta: { status: 200, msg: '', response_id: '' } };
-      }
-      try {
-        setLoading(true);
-        const res = await gf.search(activeTerm, { offset, limit: 12 });
-        console.log('Giphy API response:', { 
-          term: activeTerm,
-          count: res.data.length,
-          firstGifTitle: res.data[0]?.title 
-        });
-        if (offset === 0) {
-          setGifCount(res.data.length);
-          setNoResults(res.data.length === 0);
-        }
-        return res;
-      } catch (error) {
-        console.error('Error fetching GIFs:', error);
-        setNoResults(true);
-        return { data: [], pagination: { total_count: 0, count: 0, offset: 0 }, meta: { status: 200, msg: '', response_id: '' } };
-      } finally {
-        setLoading(false);
-      }
-    },
+    (offset: number) => gf.search(activeTerm, { offset, limit: 12 }),
     [activeTerm]
   );
 
-  // Prevent scroll-to-top on infinite scroll (Grid)
-  React.useEffect(() => {
-    const handleScroll = (e: any) => {
-      if (window.scrollY === 0 && window.innerHeight < document.body.scrollHeight) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener('scroll', handleScroll, { passive: false });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  const fetchTrending = useCallback(
+    (offset: number) => gf.trending({ offset, limit: 12 }),
+    []
+  );
 
   return (
-    <>
-      <GlobalStyle />
-      <AppContainer>
-        <CenteredBox>
-          <CatMascot><CatSVG /></CatMascot>
-          <Description>Find GIFs quick and easy. Search and discover the perfect GIF for any moment!</Description>
-          <SearchContainer>
-            <SearchIconWrapper>
-              <SearchIconSVG />
-            </SearchIconWrapper>
-            <SearchInput
-              ref={inputRef}
-              type="text"
-              placeholder="Search for GIFs..."
-              value={searchTerm}
-              onChange={handleInputChange}
-              aria-label="Search GIFs"
-              autoFocus
-            />
-            {searchTerm && (
-              <ClearButton onClick={handleClear} aria-label="Clear search">
-                <ClearIconSVG />
-              </ClearButton>
-            )}
-          </SearchContainer>
-        </CenteredBox>
-        <GridContainer>
-          {/* Always render the grid when there is an activeTerm */}
-          {activeTerm && (
-            <>
-              <Grid
-                key={activeTerm}
-                width={gridWidth}
-                columns={3}
-                gutter={12}
-                fetchGifs={fetchGifs}
+    <ThemeProvider theme={theme}>
+      <QueryClientProvider client={queryClient}>
+        <GlobalStyle />
+        <AppContainer style={{ background: theme.background, color: theme.color, minHeight: '100vh' }}>
+          <NightModeToggle onClick={() => setNightMode(n => !n)}>
+            {nightMode ? '☀️ Light Mode' : '🌙 Night Mode'}
+          </NightModeToggle>
+          <CenteredBox>
+            <CatMascot><CatSVG /></CatMascot>
+            <Description>
+              Find GIFs quick and easy. Search and discover the perfect GIF for any moment!
+            </Description>
+            <SearchContainer>
+              <SearchIconWrapper>
+                <SearchIconSVG />
+              </SearchIconWrapper>
+              <SearchInput
+                ref={inputRef}
+                type="text"
+                placeholder="Search for GIFs..."
+                value={searchTerm}
+                onChange={handleInputChange}
+                aria-label="Search GIFs"
+                autoFocus
               />
-              {/* No results message */}
-              {noResults && !loading && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '2rem' }}>
-                  <CatMascot><CatSVG /></CatMascot>
-                  <SpeechBubble>No results found!<br />Try a different keyword.</SpeechBubble>
-                </div>
+              {searchTerm && (
+                <ClearButton onClick={handleClear} aria-label="Clear search">
+                  <ClearIconSVG />
+                </ClearButton>
               )}
-            </>
-          )}
-        </GridContainer>
-      </AppContainer>
-    </>
+            </SearchContainer>
+          </CenteredBox>
+          <GridContainer>
+            <GridWrapper>
+              {activeTerm ? (
+                <Grid
+                  key={activeTerm}
+                  width={Math.min(window.innerWidth, 1000) - 32}
+                  columns={gridColumns}
+                  gutter={18}
+                  fetchGifs={fetchGifs}
+                  noLink
+                  borderRadius={18}
+                  noResultsMessage={
+                    <div style={{
+                      textAlign: 'center',
+                      fontFamily: "'Bangers', cursive",
+                      fontSize: '1.5rem',
+                      color: theme.headingColor,
+                      textShadow: theme.headingOutline,
+                      margin: '2rem 0'
+                    }}>
+                      <span role="img" aria-label="cat">😺</span>
+                      <br />
+                      No results found!<br />Try a different keyword.
+                    </div>
+                  }
+                />
+              ) : (
+                <Grid
+                  key={trendingKey}
+                  width={Math.min(window.innerWidth, 1000) - 32}
+                  columns={gridColumns}
+                  gutter={18}
+                  fetchGifs={fetchTrending}
+                  noLink
+                  borderRadius={18}
+                  noResultsMessage={
+                    <div style={{
+                      textAlign: 'center',
+                      fontFamily: "'Bangers', cursive",
+                      fontSize: '1.5rem',
+                      color: theme.headingColor,
+                      textShadow: theme.headingOutline,
+                      margin: '2rem 0'
+                    }}>
+                      <span role="img" aria-label="cat">😺</span>
+                      <br />
+                      No results found!<br />Try a different keyword.
+                    </div>
+                  }
+                />
+              )}
+            </GridWrapper>
+          </GridContainer>
+        </AppContainer>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 
