@@ -1,25 +1,445 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { GiphyFetch } from '@giphy/js-fetch-api';
+import { Grid } from '@giphy/react-components';
+import styled, { createGlobalStyle, keyframes } from 'styled-components';
+import debounce from 'lodash/debounce';
+
+const gf = new GiphyFetch(process.env.REACT_APP_GIPHY_API_KEY || '');
+
+// Google Fonts
+const GlobalStyle = createGlobalStyle`
+  @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Montserrat:wght@400;700&display=swap');
+  body {
+    font-family: 'Montserrat', Arial, sans-serif;
+    background: linear-gradient(135deg, #f8fafc 0%, #e3e9f3 100%);
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+`;
+
+const AppContainer = styled.div`
+  min-height: 100vh;
+  width: 100vw;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+`;
+
+const CenteredBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 8vh;
+  width: 100%;
+`;
+
+const Description = styled.div`
+  font-family: 'Bangers', cursive;
+  font-size: 2.2rem;
+  color: #222;
+  margin-bottom: 2rem;
+  font-weight: 400;
+  text-align: center;
+  letter-spacing: 0.01em;
+  width: 100%;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+  text-shadow: 2px 2px 0 #fff, 4px 4px 0 #2196f3;
+  @media (max-width: 600px) {
+    font-size: 1.3rem;
+    padding: 0 1rem;
+  }
+`;
+
+const CatMascot = styled.div`
+  width: 80px;
+  height: 80px;
+  margin-bottom: 1.2rem;
+  @media (max-width: 600px) {
+    width: 56px;
+    height: 56px;
+  }
+`;
+
+const SearchContainer = styled.div`
+  width: 100%;
+  max-width: 500px;
+  margin-bottom: 2.5rem;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: auto;
+  background: #fffbe7;
+  border: 3px solid #222;
+  border-radius: 32px;
+  box-shadow: 0 4px 24px rgba(33,150,243,0.08);
+  @media (max-width: 600px) {
+    max-width: 95vw;
+  }
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  padding: 1.2rem 3.5rem 1.2rem 3.2rem;
+  font-size: 1.2rem;
+  border: none;
+  border-radius: 32px;
+  background: transparent;
+  outline: none;
+  transition: box-shadow 0.2s;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 3.5rem;
+  font-family: 'Montserrat', Arial, sans-serif;
+  color: #222;
+
+  &:focus {
+    box-shadow: 0 4px 24px rgba(33,150,243,0.15);
+  }
+  @media (max-width: 600px) {
+    font-size: 1rem;
+    padding: 1rem 2.8rem 1rem 2.5rem;
+    border-radius: 24px;
+  }
+`;
+
+const SearchIconWrapper = styled.span`
+  position: absolute;
+  left: 1.1rem;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  pointer-events: none;
+`;
+
+const StyledSearchIconSVG = styled.svg`
+  height: 1.4em;
+  width: 1.4em;
+  vertical-align: middle;
+  display: block;
+`;
+
+const ClearButton = styled.button`
+  position: absolute;
+  right: 0.9rem;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #b0b0b0;
+  font-size: 1.2rem;
+  outline: none;
+  padding: 0;
+`;
+
+const StyledClearIconSVG = styled.svg`
+  height: 1.2em;
+  width: 1.2em;
+  vertical-align: middle;
+  display: block;
+`;
+
+const GridContainer = styled.div`
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 1rem 2rem 1rem;
+  @media (max-width: 1000px) {
+    max-width: 100vw;
+    padding: 0 0.5rem 2rem 0.5rem;
+  }
+`;
+
+const Spinner = styled.div`
+  border: 4px solid #e0e0e0;
+  border-top: 4px solid #2196f3;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 2rem auto;
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+// Cartoon Cat SVG
+const CatSVG = () => (
+  <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="40" cy="50" rx="28" ry="22" fill="#ffe082" stroke="#222" strokeWidth="3"/>
+    <ellipse cx="40" cy="50" rx="20" ry="16" fill="#fffbe7" stroke="#222" strokeWidth="2"/>
+    <ellipse cx="32" cy="48" rx="3" ry="4" fill="#222"/>
+    <ellipse cx="48" cy="48" rx="3" ry="4" fill="#222"/>
+    <ellipse cx="40" cy="58" rx="6" ry="3" fill="#fff" stroke="#222" strokeWidth="1.5"/>
+    <path d="M20 30 Q25 10 40 20 Q55 10 60 30" stroke="#222" strokeWidth="3" fill="none"/>
+    <polygon points="18,32 10,10 28,22" fill="#ffe082" stroke="#222" strokeWidth="2"/>
+    <polygon points="62,32 70,10 52,22" fill="#ffe082" stroke="#222" strokeWidth="2"/>
+    <line x1="20" y1="45" x2="5" y2="45" stroke="#222" strokeWidth="2"/>
+    <line x1="20" y1="48" x2="5" y2="48" stroke="#222" strokeWidth="2"/>
+    <line x1="60" y1="45" x2="75" y2="45" stroke="#222" strokeWidth="2"/>
+    <line x1="60" y1="48" x2="75" y2="48" stroke="#222" strokeWidth="2"/>
+  </svg>
+);
+
+const SpeechBubble = styled.div`
+  position: relative;
+  display: inline-block;
+  background: #fffbe7;
+  border: 3px solid #222;
+  border-radius: 24px;
+  padding: 1.2rem 2rem;
+  font-family: 'Bangers', cursive;
+  font-size: 1.3rem;
+  color: #222;
+  margin: 2rem auto 0 auto;
+  text-align: center;
+  box-shadow: 0 4px 24px rgba(33,150,243,0.08);
+  &:after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -24px;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-top: 24px solid #fffbe7;
+    border-radius: 0 0 12px 12px;
+    z-index: 1;
+  }
+  &:before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -28px;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 21px solid transparent;
+    border-right: 21px solid transparent;
+    border-top: 28px solid #222;
+    border-radius: 0 0 14px 14px;
+    z-index: 0;
+  }
+`;
+
+const LoadingOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(248, 250, 252, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const CatBounce = keyframes`
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-18px); }
+`;
+
+const AnimatedCat = styled(CatMascot)`
+  animation: ${CatBounce} 1.2s infinite;
+`;
+
+const LoadingText = styled.div`
+  font-family: 'Bangers', cursive;
+  font-size: 1.5rem;
+  color: #222;
+  margin-top: 1.2rem;
+  text-shadow: 2px 2px 0 #fff, 4px 4px 0 #2196f3;
+`;
+
+const SearchIconSVG = () => (
+  <StyledSearchIconSVG fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </StyledSearchIconSVG>
+);
+
+const ClearIconSVG = () => (
+  <StyledClearIconSVG fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </StyledClearIconSVG>
+);
 
 function App() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTerm, setActiveTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [gridWidth, setGridWidth] = useState(900);
+  const [gifCount, setGifCount] = useState(0);
+  const [noResults, setNoResults] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<any>(null);
+
+  // Stable debounced function for >3 chars
+  const debouncedSetActiveTerm = useCallback(
+    debounce((value: string) => {
+      console.log('Debounced search executing:', value);
+      setActiveTerm(value);
+      setLoading(false);
+    }, 500),
+    []
+  );
+
+  // Hybrid search logic
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    console.log('Input changed:', { value, currentActiveTerm: activeTerm });
+    setSearchTerm(value);
+    setNoResults(false);
+
+    // Cancel any pending debounce
+    debouncedSetActiveTerm.cancel();
+
+    if (value.length <= 3) {
+      // For short terms, search immediately
+      setActiveTerm(value);
+      setLoading(false);
+    } else {
+      // For longer terms, debounce
+      setLoading(true);
+      debouncedSetActiveTerm(value);
+    }
+  };
+
+  const handleClear = () => {
+    setSearchTerm('');
+    setActiveTerm('');
+    setLoading(false);
+    setNoResults(false);
+    if (inputRef.current) inputRef.current.focus();
+    debouncedSetActiveTerm.cancel();
+  };
+
+  // Responsive grid width and columns
+  React.useEffect(() => {
+    function handleResize() {
+      const width = Math.min(window.innerWidth, 1000) - 32; // 32px for padding
+      setGridWidth(width > 320 ? width : 320);
+    }
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Update fetchGifs to set firstBatchLoaded
+  const fetchGifs = useCallback(
+    async (offset: number) => {
+      console.log('fetchGifs called', { offset, activeTerm, searchTerm });
+      if (!activeTerm) {
+        setLoading(false);
+        setNoResults(false);
+        return { data: [], pagination: { total_count: 0, count: 0, offset: 0 }, meta: { status: 200, msg: '', response_id: '' } };
+      }
+      try {
+        setLoading(true);
+        const res = await gf.search(activeTerm, { offset, limit: 12 });
+        console.log('Giphy API response:', { 
+          term: activeTerm,
+          count: res.data.length,
+          firstGifTitle: res.data[0]?.title 
+        });
+        if (offset === 0) {
+          setGifCount(res.data.length);
+          setNoResults(res.data.length === 0);
+        }
+        return res;
+      } catch (error) {
+        console.error('Error fetching GIFs:', error);
+        setNoResults(true);
+        return { data: [], pagination: { total_count: 0, count: 0, offset: 0 }, meta: { status: 200, msg: '', response_id: '' } };
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeTerm]
+  );
+
+  // Prevent scroll-to-top on infinite scroll (Grid)
+  React.useEffect(() => {
+    const handleScroll = (e: any) => {
+      if (window.scrollY === 0 && window.innerHeight < document.body.scrollHeight) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: false });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <>
+      <GlobalStyle />
+      <AppContainer>
+        <CenteredBox>
+          <CatMascot><CatSVG /></CatMascot>
+          <Description>Find GIFs quick and easy. Search and discover the perfect GIF for any moment!</Description>
+          <SearchContainer>
+            <SearchIconWrapper>
+              <SearchIconSVG />
+            </SearchIconWrapper>
+            <SearchInput
+              ref={inputRef}
+              type="text"
+              placeholder="Search for GIFs..."
+              value={searchTerm}
+              onChange={handleInputChange}
+              aria-label="Search GIFs"
+              autoFocus
+            />
+            {searchTerm && (
+              <ClearButton onClick={handleClear} aria-label="Clear search">
+                <ClearIconSVG />
+              </ClearButton>
+            )}
+          </SearchContainer>
+        </CenteredBox>
+        <GridContainer>
+          {/* Always render the grid when there is an activeTerm */}
+          {activeTerm && (
+            <>
+              <Grid
+                key={activeTerm}
+                width={gridWidth}
+                columns={3}
+                gutter={12}
+                fetchGifs={fetchGifs}
+              />
+              {/* No results message */}
+              {noResults && !loading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '2rem' }}>
+                  <CatMascot><CatSVG /></CatMascot>
+                  <SpeechBubble>No results found!<br />Try a different keyword.</SpeechBubble>
+                </div>
+              )}
+            </>
+          )}
+        </GridContainer>
+      </AppContainer>
+    </>
   );
 }
 
